@@ -2,5 +2,6 @@
 
 from .blockchain import Blockchain
 from .card import Card
+from .compliance import Compliance
 
-__all__ = ["Blockchain", "Card"]
+__all__ = ["Blockchain", "Card", "Compliance"]

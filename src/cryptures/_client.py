@@ -9,6 +9,7 @@ import httpx
 from ._http import DEFAULT_BASE_URL, DEFAULT_MAX_RETRIES, DEFAULT_TIMEOUT, HttpClient
 from .resources.blockchain import Blockchain
 from .resources.card import Card
+from .resources.compliance import Compliance
 
 __all__ = ["Cryptures"]
 
@@ -44,6 +45,8 @@ class Cryptures:
     """Blockchain data, lookups, operations, wallets, contracts, fees, NFTs and storage."""
     card: Card
     """Virtual cards, the project balance, tags, reports and card webhooks."""
+    compliance: Compliance
+    """KYC/KYB sessions, AML and wallet screening, monitoring and compliance webhooks."""
 
     def __init__(
         self,
@@ -70,6 +73,7 @@ class Cryptures:
         )
         self.blockchain = Blockchain(self._http)
         self.card = Card(self._http)
+        self.compliance = Compliance(self._http)
 
     @property
     def base_url(self) -> str:
