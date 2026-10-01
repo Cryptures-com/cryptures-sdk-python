@@ -4,6 +4,8 @@ Blockchain infrastructure, crypto cards, and compliance in one client.
 Full API reference: https://docs.cryptures.com/
 """
 
+from . import types
+from ._client import Cryptures
 from ._errors import (
     AuthenticationError,
     BadRequestError,
@@ -28,6 +30,7 @@ __all__ = [
     "BadRequestError",
     "BinaryResponse",
     "ConflictError",
+    "Cryptures",
     "CrypturesApiError",
     "CrypturesConnectionError",
     "CrypturesError",
@@ -40,4 +43,5 @@ __all__ = [
     "PermissionDeniedError",
     "RateLimitError",
     "__version__",
+    "types",
 ]
