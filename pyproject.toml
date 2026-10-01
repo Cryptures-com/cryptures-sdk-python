@@ -1,0 +1,112 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cryptures"
+version = "0.1.0"
+description = "Official Python SDK for the Cryptures API: blockchain infrastructure, crypto cards, and compliance in one client."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+authors = [{ name = "Cryptures" }]
+keywords = [
+    "cryptures",
+    "blockchain",
+    "crypto",
+    "web3",
+    "api",
+    "sdk",
+    "virtual-cards",
+    "kyc",
+    "kyb",
+    "aml",
+    "compliance",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    "httpx>=0.26,<1",
+    "pydantic>=2.5,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "mypy>=1.8",
+    "ruff==0.16.9",
+]
+
+[project.urls]
+Homepage = "https://cryptures.com"
+Documentation = "https://docs.cryptures.com/"
+Repository = "https://github.com/Cryptures-com/cryptures-sdk-python"
+"Bug Tracker" = "https://github.com/Cryptures-com/cryptures-sdk-python/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cryptures"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/cryptures", "tests", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+files = ["src/cryptures", "tests"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+# The endpoint table's result checks deliberately dereference optional fields
+# that each fixture guarantees are present; a None there fails the test anyway.
+module = ["tests.cases_blockchain", "tests.cases_card", "tests.cases_compliance"]
+disable_error_code = ["union-attr", "index"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = false
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.ruff]
+line-length = 110
+target-version = "py39"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "N"]
+ignore = [
+    # Field names mirror the API's own wire format (e.g. `txId`, `cUsd`), which is camelCase.
+    "N815",
+    # Typing aliases (Optional/Union/List) are required for pydantic on Python 3.9.
+    "UP006",
+    "UP007",
+    "UP035",
+    "UP045",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cryptures"]
