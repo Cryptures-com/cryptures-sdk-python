@@ -8,6 +8,7 @@ import httpx
 
 from ._http import DEFAULT_BASE_URL, DEFAULT_MAX_RETRIES, DEFAULT_TIMEOUT, HttpClient
 from .resources.blockchain import Blockchain
+from .resources.card import Card
 
 __all__ = ["Cryptures"]
 
@@ -41,6 +42,8 @@ class Cryptures:
 
     blockchain: Blockchain
     """Blockchain data, lookups, operations, wallets, contracts, fees, NFTs and storage."""
+    card: Card
+    """Virtual cards, the project balance, tags, reports and card webhooks."""
 
     def __init__(
         self,
@@ -66,6 +69,7 @@ class Cryptures:
             default_headers=default_headers,
         )
         self.blockchain = Blockchain(self._http)
+        self.card = Card(self._http)
 
     @property
     def base_url(self) -> str:

@@ -13,7 +13,8 @@ from typing import List
 
 from ._case import Case
 from .cases_blockchain import BLOCKCHAIN_CASES
+from .cases_card import CARD_CASES
 
 __all__ = ["CASES", "Case"]
 
-CASES: List[Case] = [*BLOCKCHAIN_CASES]
+CASES: List[Case] = [*BLOCKCHAIN_CASES, *CARD_CASES]
