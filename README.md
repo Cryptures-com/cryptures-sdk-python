@@ -200,6 +200,8 @@ except CrypturesConnectionError:
 
 All of these derive from `CrypturesError`.
 
+Exceptions are safe to log. `CrypturesConnectionError` never carries the request URL, query string or headers. A URL can contain a secret, such as an EGLD mnemonic passed to `wallet.derive_address`, and the headers carry your API key. Instead, the exception exposes `err.method` and `err.path_template` (for example `"/api/v1/blockchain/wallet/{chain}"`). `CrypturesApiError.message`, `code` and `request_id` have control characters replaced with spaces and are capped at 1024 characters. The response body is kept in `err.body`, read up to 1 MiB.
+
 Some operations are documented to return a different error body. Card operations can forward the card issuer's own `{status, message, code}` body, and `exchange.rate` uses a rate-not-found body. The SDK maps these onto the same `code` and `message` attributes, and the original body is always available as `err.body`.
 
 ## Retries and idempotency
@@ -209,7 +211,8 @@ The client retries automatically, with exponential backoff (about 0.25s, 0.5s, t
 - **4xx responses are never retried.**
 - **Failures to connect** (DNS, connection refused, connect timeout) are retried for every call, because the request never reached the API.
 - **5xx responses and other network errors** (read timeouts, dropped connections) are retried only for calls that are safe to repeat: reads, writes the API documents as idempotent, and calls sent with an idempotency key.
-- **Calls that are not safe to repeat are not re-sent** once the request may have reached the API. These are `operations.send_transaction`, `operations.broadcast`, `operations.rpc`, `contracts.*`, `cards.create`/`fund`/`withdraw`, `tags.create`, `sessions.create`, `storage.upload_to_ipfs`, and `wallet.generate`, where a retry would return a different new wallet. For calls that move money or broadcast a transaction, the API documents that a 5xx does **not** mean nothing happened. Check the outcome, for example with `get_transaction_history` or `card.balance.list_transactions`, before you retry yourself.
+- **Calls that are not safe to repeat are not re-sent** once the request may have reached the API. These are `operations.send_transaction`, `operations.broadcast`, `operations.rpc` (which may carry a raw signed transaction), `contracts.*`, `cards.create`/`fund`/`withdraw`, the card state changes `cards.set_pin`/`block`/`unblock`/`terminate`, `tags.create`, `sessions.create`, `storage.upload_to_ipfs` (billed per call), `aml.check` and `wallet_screening.create` without an `idempotency_key`, and `wallet.generate`, where a retry would return a different new wallet. For calls that move money or broadcast a transaction, the API documents that a 5xx does **not** mean nothing happened. Check the outcome, for example with `get_transaction_history` or `card.balance.list_transactions`, before you retry yourself.
+- The Python, JavaScript and Go SDKs retry exactly the same set of operations.
 
 `compliance.aml.check` and `compliance.wallet_screening.create` support the API's `Idempotency-Key` header. Pass `idempotency_key=...` and a repeated call with the same key returns the original result without screening or charging again. With a key, the SDK also retries those calls automatically.
 

@@ -41,6 +41,9 @@ INITIAL_RETRY_DELAY = 0.25
 MAX_RETRY_DELAY = 8.0
 #: Upper bound for honouring a server-sent ``Retry-After`` on a 5xx.
 MAX_RETRY_AFTER = 30.0
+#: Most bytes of a non-2xx response body read into a :class:`CrypturesApiError`,
+#: so a misbehaving intermediary cannot exhaust memory (same cap as the Go SDK).
+MAX_ERROR_BODY_BYTES = 1 << 20
 
 FileTuple = Tuple[str, bytes, str]
 
@@ -58,12 +61,33 @@ class ResponseParser(Generic[T]):
         return self._adapter.validate_python(data)
 
 
+class ApiPath(str):
+    """A request path that remembers the template it was built from.
+
+    Error messages name the call by :attr:`template` (e.g.
+    ``/api/v1/blockchain/wallet/{chain}/address/{xpub}/{index}``), never by
+    the filled-in path, whose segments can be secrets.
+    """
+
+    template: str
+
+    def __new__(cls, value: str, template: str) -> ApiPath:
+        obj = super().__new__(cls, value)
+        obj.template = template
+        return obj
+
+
+def path_template(path: str) -> str:
+    """The template a path was built from, or the path itself when it has no parameters."""
+    return path.template if isinstance(path, ApiPath) else path
+
+
 def build_path(template: str, **params: Union[str, int]) -> str:
     """Fill ``{name}`` placeholders in ``template``, percent-encoding each value.
 
     Every value is encoded as a single path segment (``/`` included), and an
     empty value is rejected: it would silently route the call to a different
-    endpoint.
+    endpoint. The result remembers ``template`` (see :class:`ApiPath`).
     """
     encoded: Dict[str, str] = {}
     for name, value in params.items():
@@ -73,7 +97,7 @@ def build_path(template: str, **params: Union[str, int]) -> str:
         if text == "":
             raise ValueError(f"Path parameter {name!r} must not be empty")
         encoded[name] = quote(text, safe="")
-    return template.format(**encoded)
+    return ApiPath(template.format(**encoded), template)
 
 
 def build_query(params: Mapping[str, Any]) -> Dict[str, Union[str, int, float]]:
@@ -159,7 +183,8 @@ class HttpClient:
             data = response.json()
         except ValueError as exc:
             raise CrypturesResponseValidationError(
-                f"Expected a JSON body from {method} {path}, got {response.headers.get('content-type')!r}",
+                f"Expected a JSON body from {method} {path_template(path)}, "
+                f"got {response.headers.get('content-type')!r}",
                 status_code=response.status_code,
                 body=response.text,
             ) from exc
@@ -167,7 +192,7 @@ class HttpClient:
             return parser.parse(data)
         except ValidationError as exc:
             raise CrypturesResponseValidationError(
-                f"Unexpected response shape from {method} {path}: {exc}",
+                f"Unexpected response shape from {method} {path_template(path)}: {exc}",
                 status_code=response.status_code,
                 body=data,
             ) from exc
@@ -211,32 +236,37 @@ class HttpClient:
         )
         attempt = 0
         while True:
+            failure: Optional[httpx.TransportError] = None
             try:
-                response = self._client.send(request)
+                response = self._client.send(request, stream=True)
+                try:
+                    error_body = None if response.is_success else _read_capped(response)
+                    if error_body is None:
+                        response.read()
+                finally:
+                    response.close()
             except httpx.TransportError as exc:
                 if attempt < self.max_retries and self._should_retry_exception(exc, retry_safe):
                     self._sleep(self._retry_delay(attempt, None))
                     attempt += 1
                     continue
-                if isinstance(exc, httpx.TimeoutException):
-                    raise CrypturesTimeoutError(
-                        f"Request timed out: {method} {path}", request=request
-                    ) from exc
-                raise CrypturesConnectionError(
-                    f"Connection error during {method} {path}: {exc}", request=request
-                ) from exc
+                failure = exc
+            if failure is not None:
+                # Raised outside the ``except`` block, so the original httpx
+                # exception -- whose ``.request`` holds the full URL and the
+                # x-api-key header -- is not reachable as ``__context__``.
+                raise self._connection_error(method, path, request, failure) from _redacted_cause(
+                    failure, self._scrub(str(failure), request)
+                )
 
-            if response.is_success:
-                response.read()
+            if error_body is None:
                 return response
 
-            response.read()
             if response.status_code >= 500 and retry_safe and attempt < self.max_retries:
                 self._sleep(self._retry_delay(attempt, response))
-                response.close()
                 attempt += 1
                 continue
-            raise error_from_response(response)
+            raise error_from_response(response, error_body)
 
     def close(self) -> None:
         if self._owns_client:
@@ -271,6 +301,30 @@ class HttpClient:
             headers=merged,
             timeout=self.timeout,
         )
+
+    def _connection_error(
+        self, method: str, path: str, request: httpx.Request, exc: httpx.TransportError
+    ) -> CrypturesConnectionError:
+        template = path_template(path)
+        detail = self._scrub(str(exc), request)
+        if isinstance(exc, httpx.TimeoutException):
+            return CrypturesTimeoutError(
+                f"Request timed out: {method} {template}", method=method, path_template=template
+            )
+        return CrypturesConnectionError(
+            f"Connection error during {method} {template}: {detail}", method=method, path_template=template
+        )
+
+    def _scrub(self, text: str, request: httpx.Request) -> str:
+        """Remove the API key and every part of the request URL from an exception message."""
+        url = request.url
+        secrets = {self.api_key, str(url), url.raw_path.decode("ascii", "replace"), url.path}
+        secrets.update(url.query.decode("ascii", "replace").split("&"))
+        for _, value in url.params.multi_items():
+            secrets.update((value, quote(value, safe=""), quote(value, safe="").replace("%20", "+")))
+        for secret in sorted((s for s in secrets if len(s) > 1 and s != "/"), key=len, reverse=True):
+            text = text.replace(secret, "[REDACTED]")
+        return text
 
     @staticmethod
     def _should_retry_exception(exc: httpx.TransportError, retry_safe: bool) -> bool:
@@ -307,3 +361,24 @@ def _parse_retry_after(value: Optional[str]) -> Optional[float]:
             return None
         seconds = parsed.timestamp() - time.time()
     return max(seconds, 0.0)
+
+
+def _read_capped(response: httpx.Response) -> bytes:
+    """Read at most :data:`MAX_ERROR_BODY_BYTES` of a streamed response body."""
+    chunks = []
+    size = 0
+    for chunk in response.iter_bytes():
+        chunk = chunk[: MAX_ERROR_BODY_BYTES - size]
+        chunks.append(chunk)
+        size += len(chunk)
+        if size >= MAX_ERROR_BODY_BYTES:
+            break
+    return b"".join(chunks)
+
+
+def _redacted_cause(exc: httpx.TransportError, message: str) -> Optional[BaseException]:
+    """A copy of ``exc`` with the same type and a scrubbed message, but no ``request`` attached."""
+    try:
+        return type(exc)(message)
+    except Exception:
+        return None
