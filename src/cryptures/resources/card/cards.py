@@ -99,7 +99,9 @@ class CardCards(APIResource):
     def set_pin(self, card_id: str, pin: str) -> CardSetPinResponse:
         """Set a 6-digit PIN (``card.setpin``). Only for ``us_493_visa_atm`` cards."""
         path = build_path("/api/v1/card/cards/{card_id}/pin", card_id=card_id)
-        return self._http.request_json("POST", path, parser=_SET_PIN, retry_safe=True, json={"pin": pin})
+        # Card state changes are forwarded to the card issuer and are not
+        # retried automatically (same policy in the Go and JS SDKs).
+        return self._http.request_json("POST", path, parser=_SET_PIN, retry_safe=False, json={"pin": pin})
 
     def fund(self, card_id: str, amount: Number) -> CardFundResponse:
         """Add USD funds to a card (``card.fund``).
@@ -121,17 +123,17 @@ class CardCards(APIResource):
     def terminate(self, card_id: str) -> CardStatusChangeResponse:
         """Permanently terminate a card (``card.terminate``)."""
         path = build_path("/api/v1/card/cards/{card_id}/terminate", card_id=card_id)
-        return self._http.request_json("POST", path, parser=_STATUS_CHANGE, retry_safe=True)
+        return self._http.request_json("POST", path, parser=_STATUS_CHANGE, retry_safe=False)
 
     def block(self, card_id: str) -> CardStatusChangeResponse:
         """Freeze a card (``card.block``)."""
         path = build_path("/api/v1/card/cards/{card_id}/block", card_id=card_id)
-        return self._http.request_json("POST", path, parser=_STATUS_CHANGE, retry_safe=True)
+        return self._http.request_json("POST", path, parser=_STATUS_CHANGE, retry_safe=False)
 
     def unblock(self, card_id: str) -> CardStatusChangeResponse:
         """Unfreeze a previously blocked card (``card.unblock``)."""
         path = build_path("/api/v1/card/cards/{card_id}/unblock", card_id=card_id)
-        return self._http.request_json("POST", path, parser=_STATUS_CHANGE, retry_safe=True)
+        return self._http.request_json("POST", path, parser=_STATUS_CHANGE, retry_safe=False)
 
     def list_transactions(
         self, card_id: str, *, page_num: Optional[Union[int, str]] = None

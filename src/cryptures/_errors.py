@@ -8,6 +8,7 @@ subclasses.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, Mapping, Optional, Type
 
 import httpx
@@ -131,11 +132,26 @@ class InternalServerError(CrypturesApiError):
 
 
 class CrypturesConnectionError(CrypturesError):
-    """The request could not be completed at the network level (after any retries)."""
+    """The request could not be completed at the network level (after any retries).
 
-    def __init__(self, message: str, *, request: Optional[httpx.Request] = None) -> None:
+    Attributes:
+        method: The HTTP method of the failed call, e.g. ``"GET"``.
+        path_template: The documented path template of the failed call, e.g.
+            ``"/api/v1/blockchain/wallet/{chain}"``.
+
+    Neither the message nor any attribute carries the request URL, query
+    string or headers: a URL can contain secrets (an EGLD mnemonic passed to
+    ``wallet.derive_address`` is placed in the path) and the headers carry
+    the API key. The underlying ``httpx`` exception is kept as
+    ``__cause__``, with the same type and message but no ``request``.
+    """
+
+    def __init__(
+        self, message: str, *, method: Optional[str] = None, path_template: Optional[str] = None
+    ) -> None:
         super().__init__(message)
-        self.request = request
+        self.method = method
+        self.path_template = path_template
 
 
 class CrypturesTimeoutError(CrypturesConnectionError):
@@ -176,16 +192,45 @@ def _str_or_none(value: Any) -> Optional[str]:
     return None
 
 
-def error_from_response(response: httpx.Response) -> CrypturesApiError:
-    """Build the right :class:`CrypturesApiError` subclass for a failed response."""
+#: Longest ``code``/``message``/``request_id`` taken from a response body; the full body stays in ``body``.
+MAX_ERROR_FIELD_CHARS = 1024
+_TRUNCATED_SUFFIX = "... [truncated]"
+#: C0/C1 control characters (CR, LF, ...) plus the Unicode line and paragraph separators.
+_CONTROL_CHARS = {c: " " for c in [*range(0x00, 0x20), *range(0x7F, 0xA0), 0x2028, 0x2029]}
+
+
+def sanitize_error_field(value: str) -> str:
+    """Make a server-supplied string safe to embed in an exception message that will likely be logged.
+
+    Control characters (CR, LF, ...) become spaces, so a malicious or buggy
+    upstream cannot forge extra log lines, and the result is capped at
+    :data:`MAX_ERROR_FIELD_CHARS` characters.
+    """
+    if len(value) > MAX_ERROR_FIELD_CHARS:
+        value = value[:MAX_ERROR_FIELD_CHARS] + _TRUNCATED_SUFFIX
+    return value.translate(_CONTROL_CHARS)
+
+
+def _optional_field(value: Optional[str]) -> Optional[str]:
+    return None if value is None else sanitize_error_field(value)
+
+
+def error_from_response(response: httpx.Response, content: Optional[bytes] = None) -> CrypturesApiError:
+    """Build the right :class:`CrypturesApiError` subclass for a failed response.
+
+    ``content`` is the (possibly truncated) body when the response was read
+    as a stream; by default the response's own content is used.
+    """
     status = response.status_code
     header_request_id = response.headers.get("x-request-id")
 
+    if content is None:
+        content = response.content
     body: Any
     try:
-        body = response.json()
+        body = json.loads(content)
     except ValueError:
-        body = response.text
+        body = content.decode(response.charset_encoding or "utf-8", errors="replace")
 
     code: Optional[str] = None
     message: Optional[str] = None
@@ -218,10 +263,10 @@ def error_from_response(response: httpx.Response) -> CrypturesApiError:
         error_cls = InternalServerError if status >= 500 else CrypturesApiError
 
     return error_cls(
-        message,
+        sanitize_error_field(message),
         status_code=status,
-        code=code,
-        request_id=request_id or header_request_id,
+        code=_optional_field(code),
+        request_id=_optional_field(request_id or header_request_id),
         body=body,
         headers=response.headers,
     )
