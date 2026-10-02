@@ -16,14 +16,6 @@ Full API reference: **https://docs.cryptures.com/**
 
 ## Installation
 
-> **Coming soon to PyPI.** The package is not published yet. Until it is, install it straight from GitHub:
-
-```bash
-pip install "git+https://github.com/Cryptures-com/cryptures-sdk-python.git"
-```
-
-Once released, it will be:
-
 ```bash
 pip install cryptures
 ```
