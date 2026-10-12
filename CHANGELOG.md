@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The `User-Agent` header is now `cryptures-sdk-python/<version>` (it was `cryptures-python/<version>`), matching `cryptures-sdk-js/<version>` and `cryptures-sdk-go/<version>`. No version bump: this ships with the next release.
+
 ## 0.1.1 (2026-10-02)
 
 ### Security
