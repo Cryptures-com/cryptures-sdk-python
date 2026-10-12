@@ -55,7 +55,7 @@ def test_custom_base_url_headers_and_timeout(recorder: Recorder) -> None:
     request = recorder.last
     assert str(request.url) == "https://sandbox.example.com/api/v1/compliance/presets"
     assert request.headers["X-Trace"] == "abc"
-    assert request.headers["user-agent"] == f"cryptures-python/{__version__}"
+    assert request.headers["user-agent"] == f"cryptures-sdk-python/{__version__}"
     assert request.headers["accept"] == "application/json"
     assert request.extensions["timeout"] == {"connect": 5.0, "read": 5.0, "write": 5.0, "pool": 5.0}
 

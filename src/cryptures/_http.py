@@ -155,7 +155,7 @@ class HttpClient:
         self._client = http_client if http_client is not None else httpx.Client(timeout=timeout)
         self._default_headers: Dict[str, str] = {
             "Accept": "application/json",
-            "User-Agent": f"cryptures-python/{__version__}",
+            "User-Agent": f"cryptures-sdk-python/{__version__}",
         }
         if default_headers:
             self._default_headers.update(default_headers)

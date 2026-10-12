@@ -34,7 +34,7 @@ def test_endpoint(case: Case, client: Cryptures, recorder: Recorder) -> None:
     assert len(request.url.params.multi_items()) == len(case.query), "a query parameter was sent twice"
 
     assert request.headers["x-api-key"] == API_KEY
-    assert request.headers["user-agent"].startswith("cryptures-python/")
+    assert request.headers["user-agent"].startswith("cryptures-sdk-python/")
     for name, value in case.headers.items():
         assert request.headers[name] == value
     if "Idempotency-Key" not in case.headers:
