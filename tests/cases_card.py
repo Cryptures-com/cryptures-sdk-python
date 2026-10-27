@@ -1,4 +1,4 @@
-"""Endpoint cases for the card domain (21 operations)."""
+"""Endpoint cases for the card domain (22 operations)."""
 
 from __future__ import annotations
 
@@ -37,7 +37,9 @@ CARD = {
     "expiredate": "08/31",
     "created_at": "2026-08-29T00:00:00Z",
     "tags": [TAG],
+    "kyc": {"supported": True, "fee_usd": 1, "submitted": False, "submitted_at": None},
 }
+PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 8
 
 CARD_CASES: List[Case] = [
     # ============================================================= card.cards
@@ -82,6 +84,10 @@ CARD_CASES: List[Case] = [
             isinstance(r.data, t.Card)
             and r.data.balance.amount == 10000000
             and r.data.cardnumber == r.data.card_number
+            and r.data.kyc.supported is True
+            and r.data.kyc.fee_usd == 1
+            and r.data.kyc.submitted is False
+            and r.data.kyc.submitted_at is None
         ),
     ),
     Case(
@@ -204,11 +210,21 @@ CARD_CASES: List[Case] = [
                     "label": None,
                     "created_at": "2026-08-28T00:00:00Z",
                     "tags": [TAG],
+                    "kyc": {
+                        "supported": True,
+                        "fee_usd": 1,
+                        "submitted": True,
+                        "submitted_at": "2026-08-29T10:15:00Z",
+                    },
                 }
             ]
         },
         check=lambda r: (
-            isinstance(r, t.CardList) and r.data[0].email == "jane@example.com" and r.data[0].label is None
+            isinstance(r, t.CardList)
+            and r.data[0].email == "jane@example.com"
+            and r.data[0].label is None
+            and isinstance(r.data[0].kyc, t.CardKyc)
+            and r.data[0].kyc.submitted_at == "2026-08-29T10:15:00Z"
         ),
     ),
     Case(
@@ -239,6 +255,8 @@ CARD_CASES: List[Case] = [
                     "fund_fee_pct": 0,
                     "annual_fee_usd": 9,
                     "disallow_initial_load": True,
+                    "kyc_supported": True,
+                    "kyc_fee_usd": 0,
                 }
             ]
         },
@@ -246,6 +264,35 @@ CARD_CASES: List[Case] = [
             isinstance(r.products[0], t.CardProduct)
             and r.products[0].disallow_initial_load
             and r.products[0].min_load_usd is None
+            and r.products[0].kyc_supported is True
+            and r.products[0].kyc_fee_usd == 0
+        ),
+    ),
+    Case(
+        "card.kyc.submit",
+        "card.cards.submit_kyc",
+        lambda c: c.card.cards.submit_kyc(
+            "card_a1b2c3d4", document_front=PNG_BYTES, document_back=("back.pdf", b"%PDF-1.7 back")
+        ),
+        "POST",
+        "/api/v1/card/cards/card_a1b2c3d4/kyc",
+        status=201,
+        response={
+            "status": "success",
+            "message": "KYC documents submitted.",
+            "data": {
+                "card_id": "card_a1b2c3d4",
+                "document_front_uploaded": True,
+                "document_back_uploaded": True,
+                "fee_charged_usd": 1,
+                "fee_already_paid": False,
+            },
+        },
+        check=lambda r: (
+            isinstance(r, t.CardKycSubmitResponse)
+            and r.data.document_back_uploaded is True
+            and r.data.fee_charged_usd == 1
+            and r.data.fee_already_paid is False
         ),
     ),
     # ========================================================== card.webhooks

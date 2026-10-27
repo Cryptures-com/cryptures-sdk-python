@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import io
 import json
+import re
 from pathlib import Path
 from typing import Any, Callable
 
 import httpx
 import pytest
 
-from cryptures import Cryptures, __version__
+from cryptures import Cryptures, InsufficientBalanceError, __version__
 
 from .conftest import Recorder
 
@@ -193,6 +194,84 @@ def test_storage_upload_from_path_and_file_object(
 
     assert client.blockchain.storage.upload_to_ipfs(io.BytesIO(b"raw")).ipfsHash == "b"
     assert b'filename="upload"' in recorder.last.content and b"raw" in recorder.last.content
+
+
+KYC_OK = {
+    "status": "success",
+    "message": "KYC documents submitted.",
+    "data": {
+        "card_id": "card_1",
+        "document_front_uploaded": True,
+        "document_back_uploaded": False,
+        "fee_charged_usd": 0,
+        "fee_already_paid": False,
+    },
+}
+PNG = b"\x89PNG\r\n\x1a\n" + b"data"
+JPEG = b"\xff\xd8\xff\xe0" + b"data"
+
+
+def test_submit_kyc_sends_multipart_with_named_file_fields(
+    client: Cryptures, recorder: Recorder, tmp_path: Path
+) -> None:
+    back = tmp_path / "back.jpg"
+    back.write_bytes(JPEG)
+    recorder.queue_json(KYC_OK, status=201)
+
+    result = client.card.cards.submit_kyc("card_1", document_front=PNG, document_back=back)
+
+    request = recorder.last
+    assert request.method == "POST"
+    assert request.url.path == "/api/v1/card/cards/card_1/kyc"
+    assert request.headers["x-api-key"] == "test_api_key_123"
+    match = re.fullmatch(r"multipart/form-data; boundary=([^;]+)", request.headers["content-type"])
+    assert match, "httpx must set the multipart boundary itself"
+    body = request.content
+    assert body.count(b"Content-Disposition: form-data") == 2
+    assert b'name="documentFront"; filename="documentFront"' in body
+    assert b"Content-Type: image/png" in body
+    assert b'name="documentBack"; filename="back.jpg"' in body
+    assert b"Content-Type: image/jpeg" in body
+    assert not body.startswith(b"{")
+    assert result.data.card_id == "card_1"
+    assert result.data.fee_charged_usd == 0
+    assert result.data.document_back_uploaded is False
+
+
+def test_submit_kyc_omits_back_and_accepts_tuples_and_file_objects(
+    client: Cryptures, recorder: Recorder
+) -> None:
+    recorder.queue_json(KYC_OK, status=201)
+    recorder.queue_json(KYC_OK, status=201)
+
+    client.card.cards.submit_kyc("card_1", document_front=io.BytesIO(PNG))
+    assert b'name="documentBack"' not in recorder.last.content
+    assert b'name="documentFront"; filename="upload"' in recorder.last.content
+
+    client.card.cards.submit_kyc(
+        "card_1", document_front=("id.bin", io.BytesIO(b"x"), "application/pdf"), document_back=("b.png", PNG)
+    )
+    body = recorder.last.content
+    assert b'filename="id.bin"' in body and b"Content-Type: application/pdf" in body
+    assert b'name="documentBack"; filename="b.png"' in body
+
+
+def test_submit_kyc_surfaces_api_errors_without_retrying(client: Cryptures, recorder: Recorder) -> None:
+    recorder.queue_json(
+        {"error": {"code": "insufficient_balance", "message": "Balance too low.", "requestId": "req_1"}},
+        status=402,
+    )
+
+    with pytest.raises(InsufficientBalanceError) as info:
+        client.card.cards.submit_kyc("card_1", document_front=PNG)
+
+    assert info.value.code == "insufficient_balance"
+    assert len(recorder.requests) == 1
+
+
+def test_submit_kyc_rejects_empty_card_id(client: Cryptures) -> None:
+    with pytest.raises(ValueError, match="card_id"):
+        client.card.cards.submit_kyc("", document_front=PNG)
 
 
 def test_rpc_omits_params_when_not_given(client: Cryptures, recorder: Recorder) -> None:

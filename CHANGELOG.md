@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **Card KYC upload.** `client.card.cards.submit_kyc(card_id, *, document_front, document_back=None)` (`card.kyc.submit`, `POST /api/v1/card/cards/{card_id}/kyc`) sends the cardholder's identity documents as `multipart/form-data`. Files can be bytes, a path, a binary file object, or a `(filename, file[, content_type])` tuple. It returns the new `CardKycSubmitResponse`. The call is charged (a per-product one-time fee that can be `0`) and is never retried after the request may have reached the API.
+- Card products now expose `kyc_supported` and `kyc_fee_usd`. Cards from `get`, `list` and `create` now carry a `kyc` object (`CardKyc`: `supported`, `fee_usd`, `submitted`, `submitted_at`). The `card.kyc_submitted` webhook event is documented.
+
 ### Changed
 
 - The `User-Agent` header is now `cryptures-sdk-python/<version>` (it was `cryptures-python/<version>`), matching `cryptures-sdk-js/<version>` and `cryptures-sdk-go/<version>`. No version bump: this ships with the next release.

@@ -10,7 +10,7 @@ from cryptures import Cryptures
 
 from .endpoint_cases import CASES
 
-#: Every operationId in the Cryptures OpenAPI spec (api-docs, 80 operations).
+#: Every operationId in the Cryptures OpenAPI spec (api-docs, 81 operations).
 DOCUMENTED_OPERATIONS = {
     # blockchain -- data
     "balance.check",
@@ -76,6 +76,7 @@ DOCUMENTED_OPERATIONS = {
     "card.webhooks.register",
     "card.webhooks.status",
     "card.products.list",
+    "card.kyc.submit",
     # card -- balance
     "card.balance.get",
     "card.balance.transactions",
@@ -126,7 +127,7 @@ def _public_methods(client: Cryptures) -> Iterator[Tuple[str, str]]:
 
 
 def test_documented_operation_count() -> None:
-    assert len(DOCUMENTED_OPERATIONS) == 80
+    assert len(DOCUMENTED_OPERATIONS) == 81
 
 
 def test_every_documented_operation_has_a_case() -> None:
@@ -153,4 +154,4 @@ def test_one_sdk_method_per_operation() -> None:
     assert all(len(targets) == 1 for targets in op_to_targets.values()), op_to_targets
     target_counts = Counter(next(iter(targets)) for targets in op_to_targets.values())
     assert all(count == 1 for count in target_counts.values()), target_counts
-    assert len(target_counts) == 80
+    assert len(target_counts) == 81

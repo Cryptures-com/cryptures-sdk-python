@@ -108,6 +108,10 @@ def test_timeout_exhausted_raises_timeout_error(client: Cryptures, recorder: Rec
     [
         pytest.param(lambda c: c.card.cards.fund("card_1", 10), id="card.fund"),
         pytest.param(
+            lambda c: c.card.cards.submit_kyc("card_1", document_front=b"\x89PNG\r\n\x1a\n"),
+            id="card.kyc.submit",
+        ),
+        pytest.param(
             lambda c: c.card.cards.create(
                 product_code="p", first_name="a", last_name="b", email="e@x.io", initial_load=10
             ),
