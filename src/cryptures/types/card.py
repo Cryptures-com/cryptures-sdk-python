@@ -16,6 +16,9 @@ __all__ = [
     "CardBalance",
     "CardBalanceAmount",
     "CardFundResponse",
+    "CardKyc",
+    "CardKycSubmitData",
+    "CardKycSubmitResponse",
     "CardList",
     "CardListItem",
     "CardProduct",
@@ -66,6 +69,22 @@ class CardBalanceAmount(CrypturesModel):
     currency: str
 
 
+class CardKyc(CrypturesModel):
+    """A card's identity-document (KYC) state (on card.create, card.get and card.list).
+
+    Submit documents with ``client.card.cards.submit_kyc``.
+    """
+
+    supported: bool
+    """Whether the card's product accepts KYC documents (else 409 ``kyc_not_supported``)."""
+    fee_usd: Optional[Number]
+    """One-time KYC fee in USD for the card's product, charged on the first submission. ``0`` means free."""
+    submitted: bool
+    """Whether documents have been submitted successfully for this card."""
+    submitted_at: Optional[str]
+    """When the documents were first submitted successfully (ISO 8601), or ``None``."""
+
+
 class Card(CrypturesModel):
     """A virtual card.
 
@@ -94,6 +113,8 @@ class Card(CrypturesModel):
     """Expiry pre-combined as ``"MM/YY"``."""
     created_at: Optional[str] = None
     tags: Optional[List[CardTag]] = None
+    kyc: Optional[CardKyc] = None
+    """Identity-document (KYC) state."""
 
 
 class CardResponse(CrypturesModel):
@@ -102,6 +123,26 @@ class CardResponse(CrypturesModel):
     status: str
     message: Optional[str] = None
     data: Card
+
+
+class CardKycSubmitData(CrypturesModel):
+    card_id: str
+    document_front_uploaded: bool
+    """Always true on success."""
+    document_back_uploaded: bool
+    """Whether a back document was submitted."""
+    fee_charged_usd: Number
+    """USD charged by this call; 0 if the fee was already paid or the product's KYC fee is 0 (free)."""
+    fee_already_paid: bool
+    """True when an earlier submission already paid this card's KYC fee."""
+
+
+class CardKycSubmitResponse(CrypturesModel):
+    """Envelope returned by card.kyc.submit."""
+
+    status: str
+    message: str
+    data: CardKycSubmitData
 
 
 class CardSetPinResponse(CrypturesModel):
@@ -193,6 +234,7 @@ class CardListItem(CrypturesModel):
     """Reserved for future use -- always ``None`` today."""
     created_at: str
     tags: List[CardTag]
+    kyc: CardKyc
 
 
 class CardList(CrypturesModel):
@@ -211,6 +253,10 @@ class CardProduct(CrypturesModel):
     annual_fee_usd: Optional[Number]
     disallow_initial_load: bool
     """When true, create cards of this product without ``initial_load``."""
+    kyc_supported: bool
+    """Whether cards of this product accept identity documents via ``card.cards.submit_kyc``."""
+    kyc_fee_usd: Number
+    """One-time USD fee per card for the first KYC submission. ``0`` means the upload is free."""
 
 
 class CardProductList(CrypturesModel):

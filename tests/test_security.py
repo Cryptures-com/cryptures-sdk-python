@@ -183,6 +183,7 @@ RETRY_MATRIX: Dict[str, bool] = {
     "card.fund": False,
     "card.withdraw": False,
     "card.setpin": False,
+    "card.kyc.submit": False,
     "card.block": False,
     "card.unblock": False,
     "card.terminate": False,
@@ -256,7 +257,7 @@ RETRY_MATRIX: Dict[str, bool] = {
 
 
 def test_retry_matrix_covers_every_operation() -> None:
-    assert len(RETRY_MATRIX) == 80
+    assert len(RETRY_MATRIX) == 81
     assert {case.operation_id for case in CASES} == set(RETRY_MATRIX)
 
 

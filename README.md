@@ -69,7 +69,7 @@ The client mirrors the API's own structure: `client.<domain>.<category>.<method>
 | `client.blockchain.fee` | recommended network fees, gas estimates |
 | `client.blockchain.nft` | NFTs in a collection, owners of a token |
 | `client.blockchain.storage` | upload a file to IPFS |
-| `client.card.cards` | create, get, list, fund, withdraw, block, unblock, terminate, set PIN, set tags, transactions, products |
+| `client.card.cards` | create, get, list, fund, withdraw, block, unblock, terminate, set PIN, set tags, transactions, products, submit KYC documents |
 | `client.card.balance` | project balance, balance ledger |
 | `client.card.tags` | list, create, update, delete tags |
 | `client.card.reports` | funding/withdrawal summary report |
@@ -121,6 +121,21 @@ client.card.cards.fund(card.data.card_id, 50)
 for row in client.card.balance.list_all_transactions():
     print(row.created_at, row.type, row.amount_usd)
 ```
+
+Submit a cardholder's identity documents for cards whose product supports KYC (`card.kyc.supported`, or `kyc_supported` on `list_products()`):
+
+```python
+card = client.card.cards.get("card_a1b2c3d4")
+if card.data.kyc and card.data.kyc.supported and not card.data.kyc.submitted:
+    result = client.card.cards.submit_kyc(
+        "card_a1b2c3d4",
+        document_front="front.jpg",  # a path, bytes, or a binary file object
+        document_back=("back.pdf", open("back.pdf", "rb")),  # optional; (filename, file[, content_type])
+    )
+    print(result.data.fee_charged_usd, result.data.fee_already_paid)
+```
+
+Each file must be a PNG, JPG or PDF of at most 2 MB; the API reports anything else as an error. A one-time fee (`kyc_fee_usd` on the product, which can be `0` for a free upload) is charged from the project balance on the first submission. The call is never retried automatically, because it is charged. After a 502 or 504 the outcome is unknown: check `kyc.submitted` on `cards.get()` before submitting again. A `card.kyc_submitted` event is sent to your card webhook on success.
 
 ### Compliance
 
